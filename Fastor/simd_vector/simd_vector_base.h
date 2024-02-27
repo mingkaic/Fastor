@@ -6,6 +6,7 @@
 #include "Fastor/simd_vector/extintrin.h"
 #include "Fastor/simd_vector/simd_vector_abi.h"
 
+#include<algorithm>
 #include<cmath>
 #include<complex>
 
