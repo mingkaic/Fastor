@@ -50,7 +50,7 @@ public:
                                 is_arithmetic_pack<Args...>::value,bool>::type =0>
     FASTOR_INLINE int get_flat_index(Args ... args) const {
 #if FASTOR_BOUNDS_CHECK
-        int largs[sizeof...(Args)] = {args...};
+        int largs[sizeof...(Args)] = {static_cast<int>(args)...};
         constexpr int DimensionHolder[dimension_t::value] = {Rest...};
         for (int i=0; i<dimension_t::value; ++i) {
             if (largs[i]==-1) largs[i] += DimensionHolder[i];
@@ -78,7 +78,7 @@ public:
     // Scalar indexing const
     //----------------------------------------------------------------------------------------------------------//
 #undef SCALAR_INDEXING_CONST_H
-    #include <Fastor/tensor/ScalarIndexing.h>
+    #include "Fastor/tensor/ScalarIndexing.h"
 #define SCALAR_INDEXING_CONST_H
     //----------------------------------------------------------------------------------------------------------//
 
@@ -114,7 +114,7 @@ public:
 
     //----------------------------------------------------------------------------------------------------------//
 private:
-    const FASTOR_ALIGN std::array<T,1> _data;
+    const std::array<T,1> _data;
     //----------------------------------------------------------------------------------------------------------//
 };
 
