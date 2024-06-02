@@ -1,0 +1,29 @@
+load("//build_defs:copts.bzl", "COPTS")
+
+licenses(["notice"])
+
+######### LIBRARIES #########
+
+cc_library(
+	name = "cuda_init",
+	hdrs = ["cuda_init.h"],
+	deps = [
+		"@local_cuda//:cublas",
+		"@local_cuda//:cuda_runtime",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:optional",
+        "@com_google_absl//absl/strings",
+	],
+    copts = COPTS,
+)
+
+cc_binary(
+	name = "main",
+	srcs = ["main.cc"],
+	deps = [
+		":cuda_init",
+		"@local_cuda//:cublas",
+        "@com_google_absl//absl/flags:parse",
+	],
+    copts = COPTS,
+)

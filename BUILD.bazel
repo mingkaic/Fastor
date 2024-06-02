@@ -1,0 +1,26 @@
+load("//build_defs:copts.bzl", "COPTS")
+
+licenses(["notice"])
+
+package(
+	default_visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "hdrs",
+    srcs = glob(
+        include = [
+            "Fastor/**/*.h",
+        ],
+        exclude = ["**/CMakeLists.txt"],
+    ),
+)
+
+######### LIBRARIES #########
+
+cc_library(
+    name = "fastor",
+    hdrs = [":hdrs"],
+	defines = ["DISABLE_ASM_INTERACTION"],
+    copts = COPTS,
+)

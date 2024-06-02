@@ -17,3 +17,7 @@
 # misc
 *.DS_Store
 *CMakeCache.txt
+
+# bazel
+bazel-*
+*.lock
