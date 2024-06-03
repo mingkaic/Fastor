@@ -6,7 +6,11 @@ licenses(["notice"])
 
 cc_library(
 	name = "cuda_init",
-	hdrs = ["cuda_init.h"],
+	hdrs = [
+		"cuda_check.h",
+		"cuda_init.h",
+		"cuda_vector.h",
+	],
 	deps = [
 		"@local_cuda//:cublas",
 		"@local_cuda//:cuda_runtime",

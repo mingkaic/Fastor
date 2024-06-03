@@ -1,11 +1,13 @@
-#include <cublas_v2.h>
-#include <cuda_runtime.h>
-
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 
+#include "cuda/cuda_check.h"
+
 #ifndef FASTOR_CUDA_INIT_H
 #define FASTOR_CUDA_INIT_H
+
+namespace cuda_helper
+{
 
 struct SMtoArch
 {
@@ -76,35 +78,6 @@ static inline int smver_to_cores (int major, int minor)
 }
 
 #ifdef __CUDA_RUNTIME_H__
-
-static inline absl::Status cublas_to_status (
-		const cublasStatus_t& err, const char* filename, int line)
-{
-		if (err != CUBLAS_STATUS_SUCCESS)
-		{
-			auto msg = absl::StrFormat("CUBLAS Error: %d at %s:%d\n", err, filename, line);
-			return absl::InternalError(msg);
-		}
-		return absl::OkStatus();
-}
-
-static inline absl::Status cublas_to_status (
-		const cudaError_t& err, const char* filename, int line)
-{
-		if (err != cudaSuccess)
-		{
-			auto msg = absl::StrFormat("CUBLAS Error: %d at %s:%d\n", err, filename, line);
-			return absl::InternalError(msg);
-		}
-		return absl::OkStatus();
-}
-
-#define CUBLAS_CHECK(expr)                                        \
-	do                                                            \
-	{                                                             \
-		auto status = cublas_to_status(expr, __FILE__, __LINE__); \
-		if (!status.ok()) return status;                          \
-	} while (0)
 
 inline absl::Status gpu_device_init (int dev_id)
 {
@@ -216,7 +189,7 @@ inline absl::StatusOr<int> get_gpu_max_gflops_dev_id (void)
 	return max_perf_dev;
 }
 
-inline absl::Status gpu_device_init_max_gflops (void)
+inline absl::StatusOr<int> gpu_device_init_max_gflops (void)
 {
 	auto result = get_gpu_max_gflops_dev_id();
 	if (result.ok())
@@ -229,9 +202,11 @@ inline absl::Status gpu_device_init_max_gflops (void)
 		printf("gpu_device_init() CUDA Device [%d]: \"%s\"\n",
 				dev_id, smver_to_archname(major, minor));
 	}
-	return result.status();
+	return result;
 }
 
 #endif // __CUDA_RUNTIME_H__
+
+}
 
 #endif // FASTOR_CUDA_INIT_H
