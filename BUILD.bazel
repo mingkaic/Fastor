@@ -3,7 +3,7 @@ load("//build_defs:copts.bzl", "COPTS")
 licenses(["notice"])
 
 package(
-	default_visibility = ["//visibility:public"],
+    default_visibility = ["//visibility:public"],
 )
 
 filegroup(
@@ -21,6 +21,6 @@ filegroup(
 cc_library(
     name = "fastor",
     hdrs = [":hdrs"],
-	defines = ["DISABLE_ASM_INTERACTION"],
+    defines = ["DISABLE_ASM_INTERACTION"],
     copts = COPTS,
 )

@@ -1,5 +1,7 @@
 #include <iostream>
 
+#include <Fastor/Fastor.h>
+
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
 #include "absl/types/optional.h"
@@ -26,21 +28,30 @@ absl::Status init_cuda_device (void)
 	return cuda_helper::gpu_device_init_max_gflops().status();
 }
 
-static void simple_sgemm (int n, float alpha, const float *A, const float *B,
+static void simple_sgemm (int m, int n, int k, float alpha, const float *A, const float *B,
 		float beta, float *C)
 {
-	for (int i = 0; i < n; ++i)
+	for (int i = 0; i < m; ++i)
 	{
 		for (int j = 0; j < n; ++j)
 		{
 			float prod = 0;
-			for (int k = 0; k < n; ++k)
+			for (int l = 0; l < k; ++l)
 			{
-				prod += A[k * n + i] * B[j * n + k];
+				prod += A[l * m + i] * B[j * k + l];
 			}
-			C[j * n + i] = alpha * prod + beta * C[j * n + i];
+			C[j * m + i] = alpha * prod + beta * C[j * m + i];
 		}
 	}
+}
+
+template <int M, int N, int K>
+static void simple_sgemm2 (float *A, float *B, float *C)
+{
+	Fastor::TensorMap<float,M,K> a(A);
+	Fastor::TensorMap<float,K,N> b(B);
+	Fastor::TensorMap<float,M,N> c(C);
+	c = Fastor::einsum<Fastor::Index<0,1>,Fastor::Index<1,2>>(a, b);
 }
 
 #define STATUS_CHECK(XPR) {\
@@ -73,51 +84,63 @@ int main (int argc, char** argv)
 	STATUS_CHECK(cuda_helper::create_handle(handle));
 
 	/* Allocate host memory for the matrices */
-	const int n = 275;
-	const int n2 = n * n;
+	const int m = 277;
+	const int n = 276;
+	const int k = 275;
+	const int nA = m * k;
+	const int nB = k * n;
+	const int nC = m * n;
 
-	float h_A[n2];
-	float h_B[n2];
-	float h_C[n2];
+	float h_A[nA];
+	float h_B[nB];
+	float h_C[nC];
 
-	/* Fill the matrices with test data */
-	for (size_t i = 0; i < n2; i++)
-	{
-		h_A[i] = rand() / static_cast<float>(RAND_MAX);
-		h_B[i] = rand() / static_cast<float>(RAND_MAX);
-		h_C[i] = rand() / static_cast<float>(RAND_MAX);
-	}
-
-	/* Allocate device memory for the matrices */
-	STATUSOR_CHECK(float*, d_A, cuda_helper::malloc<float>(n2))
-	STATUSOR_CHECK(float*, d_B, cuda_helper::malloc<float>(n2))
-	STATUSOR_CHECK(float*, d_C, cuda_helper::malloc<float>(n2))
-
-	/* Initialize the device matrices with the host matrices */
-	STATUS_CHECK(cuda_helper::set_vector(n2, h_A, 1, d_A, 1))
-	STATUS_CHECK(cuda_helper::set_vector(n2, h_B, 1, d_B, 1))
-	STATUS_CHECK(cuda_helper::set_vector(n2, h_C, 1, d_C, 1))
-
-	float alpha = 1.0f;
-	float beta = 0.0f;
-
-	/* Performs operation using plain C code */
-	simple_sgemm(n, alpha, h_A, h_B, beta, h_C);
-
-	/* Performs operation using cublas */
-	STATUS_CHECK(cuda_helper::sgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N,
-				n, n, n, &alpha, d_A, n, d_B, n, &beta, d_C, n))
+	float* h2_C = new float[nC];
+	float* h3_C = new float[nC];
 
 	/* Allocate host memory for reading back the result from device memory */
-	float* h2_C = new float[n2];
 	if (h2_C == 0)
 	{
 		std::cerr << "!!!! host memory allocation error (C)" << std::endl;
 		return EXIT_FAILURE;
 	}
 
+	/* Fill the matrices with test data */
+	for (size_t i = 0; i < nA; i++)
+	{
+		h_A[i] = rand() / static_cast<float>(RAND_MAX);
+	}
+	for (size_t i = 0; i < nB; i++)
+	{
+		h_B[i] = rand() / static_cast<float>(RAND_MAX);
+	}
+	std::fill(h_C, h_C + nC, 0);
+	std::fill(h3_C, h3_C + nC, 0);
+
+	/* Allocate device memory for the matrices */
+	STATUSOR_CHECK(float*, d_A, cuda_helper::malloc<float>(nA))
+	STATUSOR_CHECK(float*, d_B, cuda_helper::malloc<float>(nB))
+	STATUSOR_CHECK(float*, d_C, cuda_helper::malloc<float>(nC))
+
+	/* Initialize the device matrices with the host matrices */
+	STATUS_CHECK(cuda_helper::set_vector(nA, h_A, 1, d_A, 1))
+	STATUS_CHECK(cuda_helper::set_vector(nB, h_B, 1, d_B, 1))
+	STATUS_CHECK(cuda_helper::set_vector(nC, h_C, 1, d_C, 1))
+
+	float alpha = 1.0f;
+	float beta = 0.0f;
+
+	/* Performs operation using plain C code */
+	simple_sgemm(m, n, k, alpha, h_A, h_B, beta, h_C);
+
+	//simple_sgemm2<m, n, k>(h_A, h_B, h3_C);
+
+	/* Performs operation using cublas */
+	STATUS_CHECK(cuda_helper::sgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N,
+				m, n, k, &alpha, d_A, m, d_B, k, &beta, d_C, m))
+
 	/* Read the result back */
-	if (cublasGetVector(n2, sizeof(h2_C[0]), d_C, 1, h2_C, 1) != CUBLAS_STATUS_SUCCESS)
+	if (cublasGetVector(nC, sizeof(h2_C[0]), d_C, 1, h2_C, 1) != CUBLAS_STATUS_SUCCESS)
 	{
 		std::cerr << "!!!! device access error (read C)" << std::endl;
 		return EXIT_FAILURE;
@@ -126,17 +149,26 @@ int main (int argc, char** argv)
 	/* Check result against reference */
 	double error_norm = 0;
 	double ref_norm = 0;
+	double error_norm2 = 0;
+	double ref_norm2 = 0;
 	double diff;
 
-	for (size_t i = 0; i < n2; ++i)
+	for (size_t i = 0; i < nC; ++i)
 	{
 		diff = h_C[i] - h2_C[i];
 		error_norm += diff * diff;
 		ref_norm += h2_C[i] * h2_C[i];
+
+		diff = h_C[i] - h3_C[i];
+		error_norm2 += diff * diff;
+		ref_norm2 += h3_C[i] * h3_C[i];
 	}
 
 	error_norm = std::sqrt(error_norm);
 	ref_norm = std::sqrt(ref_norm);
+
+	error_norm2 = std::sqrt(error_norm2);
+	ref_norm2 = std::sqrt(ref_norm2);
 
 	if (std::abs(ref_norm) < 1e-7)
 	{
@@ -146,6 +178,7 @@ int main (int argc, char** argv)
 
 	/* Memory clean up */
 	delete[] h2_C;
+	delete[] h3_C;
 
 	if (cudaFree(d_A) != cudaSuccess)
 	{
@@ -176,6 +209,7 @@ int main (int argc, char** argv)
 	if (error_norm / ref_norm < 1e-6f)
 	{
 		std::cout << "simpleCUBLAS test passed (" << error_norm << ")." << std::endl;
+		std::cout << "simpleCUBLAS test alternative err (" << error_norm2 << "), ref (" << ref_norm2 << ")." << std::endl;
 	}
 	else
 	{
